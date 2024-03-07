@@ -257,6 +257,6 @@ dH_terminal_penalties = {
     "TA": 2.2
 }
 dS_terminal_penalties = {
-    "AT": .0069,
-    "TA": .0069
+    "AT": 6.9,
+    "TA": 6.9
 }
