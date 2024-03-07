@@ -16,6 +16,8 @@ def cli_parser(prog="oxDNA_to_nNxB.py"):
     parser.add_argument('traj', type=str, nargs=1, help='The trajectory used to find which nuc are bonded and unbonded')
     parser.add_argument('-p', metavar='num_cpus', nargs=1, type=int, dest='parallel', help="(optional) How many cores to use")
     parser.add_argument('-o', '--output', metavar='output_file', nargs=1, help='The filename to save the mean structure to')
+    parser.add_argument('-r', metavar='remainder_modifier', nargs=1, type=float, dest='remainder_modifier', help="If particles_per_course_bead * remainder_modifier <= num_particle_to_bead_remainder append remainder to previous bead")
+
     return parser
 
 
@@ -34,6 +36,7 @@ def main():
     path_to_traj = abspath(args.traj[0])
     
     n_cpus = args.parallel[0] if args.parallel else 1
+    remainder_modifier = args.remainder_modifier[0] if args.remainder_modifier else 0.25
     system_name = args.output[0] if args.output else None
     
 
@@ -42,6 +45,7 @@ def main():
                   path_to_top,
                   path_to_input,
                   path_to_traj,
+                  remainder_modifier,
                   n_cpus=n_cpus,
                   system_name=system_name)
     

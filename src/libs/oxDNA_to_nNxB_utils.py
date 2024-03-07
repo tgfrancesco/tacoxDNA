@@ -8,9 +8,9 @@ from copy import deepcopy
 import json as js
 import sys
 from contextlib import contextmanager
+from scipy import stats
 
-
-def oxDNA_to_nNxB(particles_per_course_bead, path_to_conf, path_to_top, path_to_input, path_to_traj, n_cpus=1, system_name=None):
+def oxDNA_to_nNxB(particles_per_course_bead, path_to_conf, path_to_top, path_to_input, path_to_traj, remainder_modifer, n_cpus=1, system_name=None):
     """
     Converts oxDNA simulation output to nNxB format for coarse-grained analysis.
 
@@ -35,64 +35,17 @@ def oxDNA_to_nNxB(particles_per_course_bead, path_to_conf, path_to_top, path_to_
     if system_name is None:
         system_name = path_to_conf.split('/')[-1].split('.')[0]
         
-    coarse_particles_positions, coarse_particles_nucleotides, coarse_particle_indexes = create_coarse_particle_info(
-       duplex_to_particle, positions, particles_per_course_bead, monomer_id_info 
+    coarse_particles_positions, coarse_particles_nucleotides, coarse_particle_indexes, course_particle_strands = create_coarse_particle_info(
+       duplex_to_particle, positions, particles_per_course_bead, monomer_id_info, remainder_modifer=remainder_modifer 
     )
-    coarse_particles_nucleotides_ordered, coarse_particles_positions_ordered, bead_pair_dict, coarse_particle_indexes_ordered = write_course_particle_files_functional(
-       coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, system_name, particles_per_course_bead
+    coarse_particles_nucleotides_ordered, coarse_particles_positions_ordered, bead_pair_dict, coarse_particle_indexes_ordered, formatted_strand_list = write_course_particle_files_functional(
+       coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, course_particle_strands, system_name, particles_per_course_bead
     )
     if all_edge_cases:
         return print('Able to create nNxB files, but unable to assign all nucleotides to duplexes.')
     else:
         return print('nNxB files created successfully.')
 
-def run_duplex_finder_error_correction(duplex_to_particle, particle_to_duplex, nucleotides_in_duplex, positions, path_to_hb_file):
-    """
-    Runs error correction for the duplex finder by handling edge cases and non-bonded fixes.
-
-    Parameters:
-    - duplex_to_particle (dict): Mapping from duplexes to particles.
-    - particle_to_duplex (dict): Mapping from particles to duplexes.
-    - nucleotides_in_duplex: Information about nucleotides in each duplex.
-    - positions (np.array): Positions of particles.
-    - path_to_hb_file (str): Path to the hydrogen bond information file.
-
-    Returns:
-    - Updated duplex_to_particle mapping and a list of all edge cases.
-    """
-    all_edge_cases, len_one_parts = get_nuc_not_included_in_d_to_p(particle_to_duplex, nucleotides_in_duplex)
-
-    if len_one_parts.size > 0:
-        duplex_to_particle, single_nucs_dealt_with = deal_with_single_nuc_edge_cases(positions, len_one_parts, duplex_to_particle)
-
-        if type(single_nucs_dealt_with) != bool:
-            for idx, nucs in enumerate(all_edge_cases):
-                for i, val in enumerate(nucs):
-                    if val in single_nucs_dealt_with:
-                        all_edge_cases[idx].pop(i)
-
-            all_edge_cases = [sublist for sublist in all_edge_cases if sublist]
-    
-    if all_edge_cases:
-        duplex_to_particle, fixed = fully_complementary_sequential_fix(nucleotides_in_duplex, positions, all_edge_cases, duplex_to_particle)
-        if fixed:
-            values_to_remove = sum(fixed, [])
-            all_edge_cases = [[val for val in sublist if val not in values_to_remove] for sublist in all_edge_cases]
-            all_edge_cases = [sublist for sublist in all_edge_cases if sublist]   
-        
-    # duplex_to_particle, fixed = fully_complementary_sequential_fixs(nucleotides_in_duplex, positions, all_edge_cases, duplex_to_particle, path_to_hb_info_file)
-    
-    if all_edge_cases:
-        duplex_to_particle, fixed = non_bonded_fixes(path_to_hb_file, all_edge_cases, duplex_to_particle)
-        if fixed:
-            values_to_remove = np.concatenate(fixed)
-            all_edge_cases = [[val for val in sublist if val not in values_to_remove] for sublist in all_edge_cases]
-            all_edge_cases = [sublist for sublist in all_edge_cases if sublist]
-
-    if all_edge_cases:
-        print('Unable to assign all nucleotides to duplexes. Continuing with the ones that were assigned. Nucleotides not assigned to duplexes are:\n', all_edge_cases)
-    
-    return duplex_to_particle, all_edge_cases
     
 def nucleotide_and_position_info(path_to_conf, path_to_top):
     """
@@ -219,6 +172,55 @@ def associate_particle_idx_to_unique_duiplex(path_to_duplex_info:str) -> dict:
         strands[1] = strands[1][::-1]
         
     return d_to_p, p_to_d
+
+
+def run_duplex_finder_error_correction(duplex_to_particle, particle_to_duplex, nucleotides_in_duplex, positions, path_to_hb_file):
+    """
+    Runs error correction for the duplex finder by handling edge cases and non-bonded fixes.
+
+    Parameters:
+    - duplex_to_particle (dict): Mapping from duplexes to particles.
+    - particle_to_duplex (dict): Mapping from particles to duplexes.
+    - nucleotides_in_duplex: Information about nucleotides in each duplex.
+    - positions (np.array): Positions of particles.
+    - path_to_hb_file (str): Path to the hydrogen bond information file.
+
+    Returns:
+    - Updated duplex_to_particle mapping and a list of all edge cases.
+    """
+    all_edge_cases, len_one_parts = get_nuc_not_included_in_d_to_p(particle_to_duplex, nucleotides_in_duplex)
+
+    if len_one_parts.size > 0:
+        duplex_to_particle, single_nucs_dealt_with = deal_with_single_nuc_edge_cases(positions, len_one_parts, duplex_to_particle)
+
+        if type(single_nucs_dealt_with) != bool:
+            for idx, nucs in enumerate(all_edge_cases):
+                for i, val in enumerate(nucs):
+                    if val in single_nucs_dealt_with:
+                        all_edge_cases[idx].pop(i)
+
+            all_edge_cases = [sublist for sublist in all_edge_cases if sublist]
+    
+    if all_edge_cases:
+        duplex_to_particle, fixed = fully_complementary_sequential_fix(nucleotides_in_duplex, positions, all_edge_cases, duplex_to_particle)
+        if fixed:
+            values_to_remove = sum(fixed, [])
+            all_edge_cases = [[val for val in sublist if val not in values_to_remove] for sublist in all_edge_cases]
+            all_edge_cases = [sublist for sublist in all_edge_cases if sublist]   
+        
+    # duplex_to_particle, fixed = fully_complementary_sequential_fixs(nucleotides_in_duplex, positions, all_edge_cases, duplex_to_particle, path_to_hb_info_file)
+    
+    if all_edge_cases:
+        duplex_to_particle, fixed = non_bonded_fixes(path_to_hb_file, all_edge_cases, duplex_to_particle)
+        if fixed:
+            values_to_remove = np.concatenate(fixed)
+            all_edge_cases = [[val for val in sublist if val not in values_to_remove] for sublist in all_edge_cases]
+            all_edge_cases = [sublist for sublist in all_edge_cases if sublist]
+
+    if all_edge_cases:
+        print('Unable to assign all nucleotides to duplexes. Continuing with the ones that were assigned. Nucleotides not assigned to duplexes are:\n', all_edge_cases)
+    
+    return duplex_to_particle, all_edge_cases
 
 
 def get_nuc_not_included_in_d_to_p(p_to_d, nucleotides_in_duplex):
@@ -489,11 +491,12 @@ def smith_waterman(seq1, seq2, match_score=1, mismatch_penalty=-1, gap_penalty=-
     return alignment1, alignment2, seq_1_indexs, seq_2_indexs
 
 
-def create_coarse_particle_info(d_to_p, positions, particles_per_course_bead, nucleotides_in_duplex):
-    
+def create_coarse_particle_info(d_to_p, positions, particles_per_course_bead, nucleotides_in_duplex, remainder_modifer=0.25):
+    remainder_modifer = np.floor(particles_per_course_bead * remainder_modifer)
     coarse_particles_positions = {}
     coarse_particles_nucleotides = {}
     coarse_particle_indexes = {}
+    course_particle_strands = {}
     
     # Iterate through each duplex
     # duplex is the int starting at 1, strand is each strand in the duplex
@@ -506,26 +509,65 @@ def create_coarse_particle_info(d_to_p, positions, particles_per_course_bead, nu
             coarse_positions = []
             coarse_nucleotides = []
             course_indexes = []
-            # Iterate through the particles in the strand, taking 4 at a time
+            course_strands = []
+            
+            # Iterate through the particles in the strand, taking N at a time
             for i in range(0, len(strand), particles_per_course_bead):
                 # Get the particle indices of the current group
                 particle_indices = strand[i:i+particles_per_course_bead]
-                course_indexes.append(particle_indices)
-                # Compute the center of mass for the current group
-                center_of_mass = np.mean(positions[particle_indices], axis=0)
-                coarse_positions.append(center_of_mass)
-                
-                # Accumulate the nucleotide types for the current group
-                nucleotide_types = ''.join([nucleotides_in_duplex[idx].btype for idx in particle_indices])
-                coarse_nucleotides.append(nucleotide_types)
+
+                if (len(particle_indices) > remainder_modifer) or (not course_indexes):
+                    course_indexes.append(particle_indices)
+                    # Compute the center of mass for the current group
+                    center_of_mass = np.mean(positions[particle_indices], axis=0)
+                    coarse_positions.append(center_of_mass)
+
+                    # Accumulate the nucleotide types for the current group
+                    nucleotide_types = ''.join([nucleotides_in_duplex[idx].btype for idx in particle_indices])
+                    coarse_nucleotides.append(nucleotide_types)
+                    
+                    strand_ids = stats.mode([nucleotides_in_duplex[idx].strand.id for idx in particle_indices], keepdims=False)[0]
+                    course_strands.append(strand_ids)
+                    
+                elif len(particle_indices) <= remainder_modifer:
+                    course_indexes[-1].extend(particle_indices)
+
+                    # Accumulate the nucleotide types for the current group
+                    nucleotide_types = ''.join([nucleotides_in_duplex[idx].btype for idx in particle_indices])
+                    coarse_nucleotides[-1] += nucleotide_types
     
+                    # Compute the center of mass for the current group
+                    particle_indices = strand[i-particles_per_course_bead:]
+                    center_of_mass = np.mean(positions[particle_indices], axis=0)
+                    coarse_positions[-1] = center_of_mass
+                    
+                    strand_ids = stats.mode([nucleotides_in_duplex[idx].strand.id for idx in particle_indices], keepdims=False)[0]
+                    course_strands[-1] = (strand_ids)
+                else:
+                    print(f'Error: Something went wrong with the coarse-graining process. Duplex idx: {duplex}')
+                    
+                    
             # Store the coarse-grained positions for the current strand in the duplex
             key = (duplex, strand_idx)
             coarse_particles_positions[key] = coarse_positions
             coarse_particles_nucleotides[key] = coarse_nucleotides
             coarse_particle_indexes[key] = course_indexes
+            course_particle_strands[key] = course_strands
     
-    return coarse_particles_positions, coarse_particles_nucleotides, coarse_particle_indexes
+    return coarse_particles_positions, coarse_particles_nucleotides, coarse_particle_indexes, course_particle_strands
+
+
+def write_course_particle_files_functional(coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, course_particle_strands, system_name, particles_per_course_bead):
+    write_sanity_check(coarse_particles_nucleotides, system_name)
+    
+    keys_ordered_acending, indexes_ordered_acending = order_indexes_and_keys_acending(coarse_particle_indexes)
+    
+    coarse_particles_nucleotides_ordered = write_course_particle_nucleotides(coarse_particles_nucleotides, coarse_particle_indexes, keys_ordered_acending, system_name, particles_per_course_bead)
+    coarse_particles_positions_ordered = write_course_particles_positions(coarse_particles_positions, keys_ordered_acending, system_name, particles_per_course_bead)
+    bead_pair_dict, coarse_particle_indexes_ordered = write_course_particle_bonded_pairs(coarse_particle_indexes, coarse_particles_nucleotides_ordered, indexes_ordered_acending, system_name, particles_per_course_bead)
+    strand_list = write_strand_info(course_particle_strands, coarse_particles_nucleotides, keys_ordered_acending, system_name, particles_per_course_bead)
+    
+    return coarse_particles_nucleotides_ordered, coarse_particles_positions_ordered, bead_pair_dict, coarse_particle_indexes_ordered, strand_list
 
 
 def order_indexes_and_keys_acending(coarse_particle_indexes):
@@ -543,6 +585,51 @@ def order_indexes_and_keys_acending(coarse_particle_indexes):
                 
     return keys_ordered_acending, indexes_ordered_acending
 
+
+def write_strand_info(course_particle_strands, coarse_particles_nucleotides, keys_ordered_acending, system_name, particles_per_course_bead):  
+    ordered_nucs = deepcopy(coarse_particles_nucleotides)
+    
+    # Reverse the nucleotides in each group to put the nucleotides back
+    # in 3` to 5` order after I reversed them in d_to_p
+    course_keys = list(coarse_particles_nucleotides.keys())
+    num_course_duplex = len([key for key in course_keys if key[1] == 1])
+    
+    for idx in range(num_course_duplex):
+        for lists in range(len(coarse_particles_nucleotides[(idx+1,1)])):
+            ordered_nucs[(idx+1,1)][lists] = coarse_particles_nucleotides[(idx+1,1)][lists][::-1]
+
+    # Reverse the order of the groups to put them back in 3` to 5` order
+    for idx in range(num_course_duplex):
+        ordered_nucs[(idx+1,1)] = coarse_particles_nucleotides[(idx+1,1)][::-1]
+    
+    sort_particles_based_on_strand = {}
+    
+    for key in keys_ordered_acending:
+        strands = course_particle_strands[key]
+        nucs = ordered_nucs[key]
+        
+        for strand, nuc in zip(strands, nucs):
+            if strand not in sort_particles_based_on_strand:
+                sort_particles_based_on_strand[strand] = []
+            sort_particles_based_on_strand[strand].append(nuc)
+    
+    sorted_keys = sorted(sort_particles_based_on_strand.keys())
+    formatted_list = []
+    for key in sorted_keys:
+        list_of_nucs = sort_particles_based_on_strand[key]
+        formatted_list.extend(['x',])
+        formatted_list.extend(list_of_nucs)
+        formatted_list.extend(['x',])
+    
+    five_to_three_formatted_list = []
+    for nucs in formatted_list:
+        five_to_three_formatted_list.append(nucs[::-1])
+    five_to_three_formatted_list = five_to_three_formatted_list[::-1]
+    
+    with open(f'{system_name}_{particles_per_course_bead}_nuc_beads_strands_list.txt', 'w') as f:
+        f.write(f'{five_to_three_formatted_list}')
+    
+    return formatted_list
 
 def write_course_particle_nucleotides(coarse_particles_nucleotides, coarse_particle_indexes, keys_ordered_acending, system_name, particles_per_course_bead):
     ordered_nucs = deepcopy(coarse_particles_nucleotides)
@@ -596,7 +683,7 @@ def write_course_particles_positions(coarse_particles_positions, keys_ordered_ac
     return coarse_particles_positions_ordered
 
 
-def write_course_particle_bonded_pairs(coarse_particle_indexes, indexes_ordered_acending, system_name, particles_per_course_bead):
+def write_course_particle_bonded_pairs(coarse_particle_indexes, coarse_particles_nucleotides_ordered, indexes_ordered_acending, system_name, particles_per_course_bead):
     ordered_indexes = deepcopy(coarse_particle_indexes)
     
     course_keys = list(coarse_particle_indexes.keys())
@@ -646,12 +733,14 @@ def write_course_particle_bonded_pairs(coarse_particle_indexes, indexes_ordered_
             course_bead_idx_pair_dict[i] = (dict_values.index(beads[0]),)
         i +=1
     
+    nucs = [item for sublist in coarse_particles_nucleotides_ordered for item in sublist]
+    
     with open(f'{system_name}_{particles_per_course_bead}_nuc_beads_bonds.txt', 'w') as f:
         for key, value in course_bead_idx_pair_dict.items():
             try:
-                f.write(f'{value[0]} {value[1]}\n')
+                f.write(f'({value[0]}, {value[1]}): {nucs[value[0]]} {nucs[value[1]]}\n')
             except:
-                f.write(f'{value[0]}\n')
+                f.write(f'({value[0]}): {nucs[value[0]]}\n')
             
     return course_bead_idx_pair_dict, ordered_indexes
 
@@ -666,17 +755,7 @@ def write_sanity_check(coarse_particles_nucleotides, system_name):
         f.write(stringify)
 
 
-def write_course_particle_files_functional(coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, system_name, particles_per_course_bead):
-    write_sanity_check(coarse_particles_nucleotides, system_name)
-    
-    keys_ordered_acending, indexes_ordered_acending = order_indexes_and_keys_acending(coarse_particle_indexes)
-    
-    coarse_particles_nucleotides_ordered = write_course_particle_nucleotides(coarse_particles_nucleotides, coarse_particle_indexes, keys_ordered_acending, system_name, particles_per_course_bead)
-    coarse_particles_positions_ordered = write_course_particles_positions(coarse_particles_positions, keys_ordered_acending, system_name, particles_per_course_bead)
-    bead_pair_dict, coarse_particle_indexes_ordered = write_course_particle_bonded_pairs(coarse_particle_indexes, indexes_ordered_acending, system_name, particles_per_course_bead)
-    
-    return coarse_particles_nucleotides_ordered, coarse_particles_positions_ordered, bead_pair_dict, coarse_particle_indexes_ordered
-  
+
 
   
   
