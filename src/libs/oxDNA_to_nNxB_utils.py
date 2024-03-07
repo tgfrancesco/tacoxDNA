@@ -625,6 +625,8 @@ def write_strand_info(course_particle_strands, coarse_particles_nucleotides, key
     for nucs in formatted_list:
         five_to_three_formatted_list.append(nucs[::-1])
     five_to_three_formatted_list = five_to_three_formatted_list[::-1]
+
+    print_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead)
     
     with open(f'{system_name}_{particles_per_course_bead}_nuc_beads_strands_list.txt', 'w') as f:
         f.write(f'{five_to_three_formatted_list}')
@@ -755,7 +757,32 @@ def write_sanity_check(coarse_particles_nucleotides, system_name):
         f.write(stringify)
 
 
+def print_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead):
+    x_idx = [i for i,e in enumerate(five_to_three_formatted_list) if e=='x']
+    n_beads_in_each_strand = [x_idx[i+1]-x_idx[i]-1 for i in range(len(x_idx)-1)]
+    number_of_strands = len(n_beads_in_each_strand)
 
+    with open(f'{system_name}_{particles_per_course_bead}_ANNaMo.top', 'w') as topo_file:
+        topo_file.write("{} {}\n".format(sum(n_beads_in_each_strand), number_of_strands))
+        idx = 0
+        for ctrl,n in enumerate(n_beads_in_each_strand):
+            if ctrl == 0:
+                typ = 0
+            else: typ = 1
+            for i in range(n):
+                if i == 0 or i == n-1:
+                    topo_file.write("{} {} 1\n".format(idx, idx+1+ctrl))
+                    if i == 0:
+                        topo_file.write("{}\n".format(idx+1))
+                    elif i == n-1:
+                        topo_file.write("{}\n".format(idx-1))
+                else:
+                    topo_file.write("{} {} 2\n".format(idx, idx+1+ctrl))
+                    topo_file.write("{} {}\n".format(idx-1, idx+1))
+
+                idx += 1
+
+            topo_file.write("\n")
 
   
   
