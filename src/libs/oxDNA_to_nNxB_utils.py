@@ -827,7 +827,6 @@ def dH_dS(seq1, seq2):
     dS = 0
     weight = 0.5
 
-    print(seq1,seq2)
     for k in range(len(seq1)-1):
         if seq1[k:k+2]+seq2[::-1][k:k+2] in dH_stack.keys():
             if k == 0 or k == len(seq1)-2:
