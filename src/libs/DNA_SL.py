@@ -252,6 +252,8 @@ dS_stack = {
  'TGTC': -15.7,
  'TCTG': -8.5
 }
+dH_initiation = 0.2
+dS_initiation = -5.7
 dH_terminal_penalties = {
     "AT": 2.2,
     "TA": 2.2

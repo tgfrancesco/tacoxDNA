@@ -76,23 +76,49 @@ dS_stack = {
         'UUGA': -16.53,
         'UUGG': -28.57
         }
-dH_AU_terminal_penalties = {
-    'UA': 4.36,
-    'GC': 3.17,
-    'UG': 5.16
+dH_initiation = 4.66
+dS_initiation = 1.78
+dH_terminal_penalties = {
+    'AU': {
+        'UA': 4.36,
+        'GC': 3.17,
+        'UG': 5.16
+    },
+    'UA': {
+        'AU': 4.36,
+        'CG': 3.17,
+        'GU': 5.16
+    },
+    'GU': {
+        'UA': 3.65,
+        'GC': 3.91,
+        'UG': 6.23
+    },
+    'UG': {
+        'AU': 3.65,
+        'CG': 3.91,
+        'GU': 6.23
+    }
 }
-dS_AU_terminal_penalties = {
-    'UA': 13.35,
-    'GC': 8.79,
-    'UG': 18.96
-}
-dH_GU_terminal_penalties = {
-    'UA': 3.65,
-    'GC': 3.91,
-    'UG': 6.23
-}
-dS_GU_terminal_penalties = {
-    'UA': 12.78,
-    'GC': 12.17,
-    'UG': 22.47
+dS_terminal_penalties = {
+    'AU': {
+        'UA': 13.35,
+        'GC': 8.79,
+        'UG': 18.96
+    },
+    'UA': {
+        'AU': 13.35,
+        'CG': 8.79,
+        'GU': 18.96
+    },
+    'GU': {
+        'UA': 12.78,
+        'GC': 12.17,
+        'UG': 22.47
+    },
+    'UG': {
+        'AU': 12.78,
+        'CG': 12.17,
+        'GU': 22.47
+    }
 }
