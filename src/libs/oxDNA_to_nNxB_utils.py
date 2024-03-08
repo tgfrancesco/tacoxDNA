@@ -10,7 +10,7 @@ import sys
 from contextlib import contextmanager
 from scipy import stats
 
-def oxDNA_to_nNxB(particles_per_course_bead, path_to_conf, path_to_top, path_to_input, path_to_traj, remainder_modifer, n_cpus=1, system_name=None):
+def oxDNA_to_nNxB(particles_per_course_bead, path_to_conf, path_to_top, path_to_input, path_to_traj, material, remainder_modifer, n_cpus=1, system_name=None):
     """
     Converts oxDNA simulation output to nNxB format for coarse-grained analysis.
 
@@ -39,7 +39,7 @@ def oxDNA_to_nNxB(particles_per_course_bead, path_to_conf, path_to_top, path_to_
        duplex_to_particle, positions, particles_per_course_bead, monomer_id_info, remainder_modifer=remainder_modifer 
     )
     coarse_particles_nucleotides_ordered, coarse_particles_positions_ordered, bead_pair_dict, coarse_particle_indexes_ordered, formatted_strand_list = write_course_particle_files_functional(
-       coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, course_particle_strands, system_name, particles_per_course_bead
+       coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, course_particle_strands, system_name, particles_per_course_bead, material
     )
     if all_edge_cases:
         return print('Able to create nNxB files, but unable to assign all nucleotides to duplexes.')
@@ -557,7 +557,7 @@ def create_coarse_particle_info(d_to_p, positions, particles_per_course_bead, nu
     return coarse_particles_positions, coarse_particles_nucleotides, coarse_particle_indexes, course_particle_strands
 
 
-def write_course_particle_files_functional(coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, course_particle_strands, system_name, particles_per_course_bead):
+def write_course_particle_files_functional(coarse_particles_nucleotides, coarse_particles_positions, coarse_particle_indexes, course_particle_strands, system_name, particles_per_course_bead, material):
     write_sanity_check(coarse_particles_nucleotides, system_name)
     
     keys_ordered_acending, indexes_ordered_acending = order_indexes_and_keys_acending(coarse_particle_indexes)
@@ -565,7 +565,7 @@ def write_course_particle_files_functional(coarse_particles_nucleotides, coarse_
     coarse_particles_nucleotides_ordered = write_course_particle_nucleotides(coarse_particles_nucleotides, coarse_particle_indexes, keys_ordered_acending, system_name, particles_per_course_bead)
     coarse_particles_positions_ordered = write_course_particles_positions(coarse_particles_positions, keys_ordered_acending, system_name, particles_per_course_bead)
     bead_pair_dict, coarse_particle_indexes_ordered = write_course_particle_bonded_pairs(coarse_particle_indexes, coarse_particles_nucleotides_ordered, indexes_ordered_acending, system_name, particles_per_course_bead)
-    strand_list = write_strand_info(course_particle_strands, coarse_particles_nucleotides, keys_ordered_acending, system_name, particles_per_course_bead)
+    strand_list = write_strand_info(course_particle_strands, coarse_particles_nucleotides, keys_ordered_acending, system_name, particles_per_course_bead, material)
     
     return coarse_particles_nucleotides_ordered, coarse_particles_positions_ordered, bead_pair_dict, coarse_particle_indexes_ordered, strand_list
 
@@ -586,7 +586,7 @@ def order_indexes_and_keys_acending(coarse_particle_indexes):
     return keys_ordered_acending, indexes_ordered_acending
 
 
-def write_strand_info(course_particle_strands, coarse_particles_nucleotides, keys_ordered_acending, system_name, particles_per_course_bead):  
+def write_strand_info(course_particle_strands, coarse_particles_nucleotides, keys_ordered_acending, system_name, particles_per_course_bead, material):  
     ordered_nucs = deepcopy(coarse_particles_nucleotides)
     
     # Reverse the nucleotides in each group to put the nucleotides back
@@ -626,7 +626,9 @@ def write_strand_info(course_particle_strands, coarse_particles_nucleotides, key
         five_to_three_formatted_list.append(nucs[::-1])
     five_to_three_formatted_list = five_to_three_formatted_list[::-1]
 
-    print_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead)
+    write_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead)
+    write_annamo_interaction_matrix(five_to_three_formatted_list, material)
+
     
     with open(f'{system_name}_{particles_per_course_bead}_nuc_beads_strands_list.txt', 'w') as f:
         f.write(f'{five_to_three_formatted_list}')
@@ -757,7 +759,7 @@ def write_sanity_check(coarse_particles_nucleotides, system_name):
         f.write(stringify)
 
 
-def print_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead):
+def write_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead):
     x_idx = [i for i,e in enumerate(five_to_three_formatted_list) if e=='x']
     n_beads_in_each_strand = [x_idx[i+1]-x_idx[i]-1 for i in range(len(x_idx)-1)]
     number_of_strands = len(n_beads_in_each_strand)
@@ -784,7 +786,208 @@ def print_annamo_topology(five_to_three_formatted_list, system_name, particles_p
 
             topo_file.write("\n")
 
-  
+
+def write_annamo_interaction_matrix(beads_sequences, material):
+    beads_sequences = check_material(beads_sequences, material)
+    H,S = interaction_matrix(beads_sequences, material, 1)
+    x_idx = [i for i,e in enumerate(beads_sequences) if e=='x']
+
+    with open("dHdS_annamo.dat","w") as f_matrix:
+        for i in range(1, H.shape[0]-1):
+            for j in range(i, H.shape[1]-1):
+                if i not in x_idx and j not in x_idx:
+                    dH_init = 0
+                    dS_init = 0
+
+                    multi_strand_system = len(x_idx) > 2
+
+                    if multi_strand_system:
+                        dH_init, dS_init = initiation_contrib(i, j, x_idx)
+
+                    terminal_info = check_terminal(beads_sequences, i, j, x_idx) 
+                    if terminal_info["is_terminal"]:
+                        dH_terminal, dS_terminal = terminal_penalties(beads_sequences, i, j, terminal_info["condition"], material)
+                    else:
+                        dH_terminal = 0
+                        dS_terminal = 0
+
+                    dH_tot = np.round(H[i][j] + dH_init + dH_terminal, 2)
+                    dS_tot = np.round(S[i][j] + dS_init + dS_terminal, 2)
+
+                    f_matrix.write("dH[{}][{}] = {}\n".format(i, j, dH_tot))
+                    f_matrix.write("dS[{}][{}] = {}\n".format(i, j, dS_tot))
+
+
+########################################################
+#### Functions to calculate the interaction matrix #####
+########################################################
+
+def dH_dS(seq1, seq2):
+    dH = 0
+    dS = 0
+    weight = 0.5
+
+    print(seq1,seq2)
+    for k in range(len(seq1)-1):
+        if seq1[k:k+2]+seq2[::-1][k:k+2] in dH_stack.keys():
+            if k == 0 or k == len(seq1)-2:
+                weight = 0.5
+                dH += weight * dH_stack[ seq1[k:k+2]+seq2[::-1][k:k+2] ]
+                dS += weight * dS_stack[ seq1[k:k+2]+seq2[::-1][k:k+2] ]
+
+            else:
+                weight = 1
+                dH += dH_stack[ seq1[k:k+2]+seq2[::-1][k:k+2] ]
+                dS += dS_stack[ seq1[k:k+2]+seq2[::-1][k:k+2] ]
+
+        else:
+            pass
+
+    return dH, dS
+
+
+def sliding_window(seqs, i, j):
+    slide_time = len(seqs[i]) - len(seqs[j])
+    HS = []
+    seq_j = seqs[j+1][0]+seqs[j][::-1]+seqs[j-1][-1]
+    for sl in range(slide_time + 1):
+        if sl == 0:
+            if sl == slide_time:
+                HS.append( dH_dS(seqs[i-1][-1]+seqs[i]+seqs[i+1][0],  seq_j[::-1] ) )
+            else:
+                HS.append( dH_dS(seqs[i-1][-1]+seqs[i][:len(seqs[j])+1],  seq_j[::-1] ) )
+
+        elif sl == slide_time:
+            HS.append( dH_dS(seqs[i][sl-1:sl+len(seqs[j])]+seqs[i+1][0],  seq_j[::-1] ) )
+
+        else:
+            HS.append( dH_dS(seqs[i][sl-1:sl+len(seqs[j])+1], seq_j[::-1] ) )
+
+    HS.sort(key=lambda x: x[0])
+
+    return HS[0][0], HS[0][1]
+
+
+def ordering_seqs(seq1, seq2, idx1, idx2):
+    if len(seq1)>=len(seq2):
+        return idx1, idx2
+    else:
+        return idx2, idx1
+
+
+def interaction_matrix(seqs,material,salt_conc):
+    dH = np.zeros((len(seqs),len(seqs)))
+    dS = np.zeros((len(seqs),len(seqs)))
+
+    for i in range(1, len(seqs)-1):
+        for j in range(i+1, len(seqs)-1):
+
+            longer, shorter = ordering_seqs(seqs[i], seqs[j], i, j)
+
+            H, S = sliding_window(seqs, longer, shorter)
+            dH[i][j] = H
+            dS[i][j] = S
+
+            #salt_correction = 0.368 * (len(seqs[i]) - 1.0)  * math.log(salt_conc)
+            #dS[i][j] += salt_correction
+
+    return dH, dS
+
+
+def initiation_contrib(i, j, x_idx):
+    lower_x = [e for e in x_idx if e<i][-1]     
+    upper_x = [e for e in x_idx if e>i][0] 
+
+    ij_not_same_strand = j > upper_x
+    if ij_not_same_strand:
+        size_strand_i = upper_x - lower_x - 1
+        lower_x_j = [e for e in x_idx if e<j][-1]
+        upper_x_j = [e for e in x_idx if e>j][0]
+        size_strand_j = upper_x_j - lower_x_j - 1
+
+        dH_init = dH_initiation/min(size_strand_i, size_strand_j)
+        dS_init = dS_initiation/min(size_strand_i, size_strand_j)
+
+        return dH_init, dS_init
+    
+    else:
+        return 0, 0
+
+def check_terminal(tris, i, j, x_idx):
+    i_is_initial = i in [e+1 for e in x_idx]
+    j_is_final = j in [e-1 for e in x_idx]
+    terminal_1 = tris[i][0]+tris[j][-1]
+    condition_1 = i_is_initial and j_is_final and terminal_1 in dH_terminal_penalties.keys()
+
+    i_is_final = i in [e-1 for e in x_idx]
+    j_is_initial = j in [e+1 for e in x_idx]
+    terminal_2 = tris[j][0]+tris[i][-1]
+    condition_2 = i_is_final and j_is_initial and terminal_2 in dH_terminal_penalties.keys()
+
+    cond = "condition_i_init_j_fin" if condition_1 else "condition_i_fin_j_init" if condition_2 else None
+
+    terminal_info = {
+        "is_terminal": i_is_final and j_is_initial or i_is_final and j_is_initial,
+        "condition": cond
+        }
+    
+    return terminal_info
+
+
+def terminal_penalties(beads_sequences, i, j, condition, material):
+    if condition == "condition_i_init_j_fin":
+        terminal = beads_sequences[i][0] + beads_sequences[j][-1]
+        if material == "DNA":
+            dH_term = dH_terminal_penalties[terminal]
+            dS_term = dS_terminal_penalties[terminal]
+            return dH_term, dS_term
+
+        else:
+            pre_terminal = beads_sequences[1][0] + beads_sequences[j][-2]
+            if pre_terminal in dH_terminal_penalties[terminal]:
+                dH_term = dH_terminal_penalties[terminal][pre_terminal]
+                dS_term = dS_terminal_penalties[terminal][pre_terminal]
+                return dH_term, dS_term
+            else:
+                return 0, 0
+            
+    elif condition == "condition_i_fin_j_init":
+        terminal = beads_sequences[j][0] + beads_sequences[i][-1]
+        if material == "DNA":
+            dH_term = dH_terminal_penalties[terminal]
+            dS_term = dS_terminal_penalties[terminal]
+            return dH_term, dS_term
+
+        else:
+            pre_terminal = beads_sequences[j][1] + beads_sequences[i][-2]
+            if pre_terminal in dH_terminal_penalties[terminal]:
+                dH_term = dH_terminal_penalties[terminal][pre_terminal]
+                dS_term = dS_terminal_penalties[terminal][pre_terminal]
+                return dH_term, dS_term
+            else:
+                return 0, 0
+
+
+def check_material(beads_sequences, material):
+    material = material.upper()
+    if material == 'DNA':
+        beads_sequences = [beads_sequences[i].upper().replace('U','T') for i in range(len(beads_sequences))]
+        from DNA_SL import dH_stack, dS_stack, dH_initiation, dS_initiation, dH_terminal_penalties, dS_terminal_penalties
+    elif material =='RNA':
+        beads_sequences = [beads_sequences[i].upper().replace('T','U') for i in range(len(beads_sequences))]
+        from RNA_22 import dH_stack, dS_stack, dH_initiation, dS_initiation, dH_terminal_penalties, dS_terminal_penalties
+    else:
+        print("Error: material option must be specified! Choose between RNA and DNA")
+        exit(0)
+
+    global dH_stack
+    global dH_initiation
+    global dH_terminal_penalties
+    global dS_stack
+    global dS_initiation
+    global dS_terminal_penalties
+
+    return beads_sequences
   
   
 ########################################################
