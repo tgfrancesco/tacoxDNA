@@ -626,6 +626,7 @@ def write_strand_info(course_particle_strands, coarse_particles_nucleotides, key
         five_to_three_formatted_list.append(nucs[::-1])
     five_to_three_formatted_list = five_to_three_formatted_list[::-1]
 
+    print(material)
     write_annamo_topology(five_to_three_formatted_list, system_name, particles_per_course_bead)
     write_annamo_interaction_matrix(five_to_three_formatted_list, material)
 
@@ -971,10 +972,10 @@ def check_material(beads_sequences, material):
     material = material.upper()
     if material == 'DNA':
         beads_sequences = [beads_sequences[i].upper().replace('U','T') for i in range(len(beads_sequences))]
-        from DNA_SL import dH_stack, dS_stack, dH_initiation, dS_initiation, dH_terminal_penalties, dS_terminal_penalties
+        from libs.DNA_SL import dH_stack, dS_stack, dH_initiation, dS_initiation, dH_terminal_penalties, dS_terminal_penalties
     elif material =='RNA':
         beads_sequences = [beads_sequences[i].upper().replace('T','U') for i in range(len(beads_sequences))]
-        from RNA_22 import dH_stack, dS_stack, dH_initiation, dS_initiation, dH_terminal_penalties, dS_terminal_penalties
+        from libs.RNA_22 import dH_stack, dS_stack, dH_initiation, dS_initiation, dH_terminal_penalties, dS_terminal_penalties
     else:
         print("Error: material option must be specified! Choose between RNA and DNA")
         exit(0)
