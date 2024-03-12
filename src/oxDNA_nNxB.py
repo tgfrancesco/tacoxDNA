@@ -35,7 +35,7 @@ def main():
     path_to_top = abspath(args.top[0])
     path_to_input = abspath(args.input[0])
     path_to_traj = abspath(args.traj[0])
-    material = abspath(args.material[0])
+    material = args.material[0]
     
     n_cpus = args.parallel[0] if args.parallel else 1
     remainder_modifier = args.remainder_modifier[0] if args.remainder_modifier else 0.25
