@@ -2,15 +2,15 @@
 
 # This script converts cando format to oxDNA2 files
 import sys
-import numpy as np
 
+import numpy as np
 from libs.readers import LorenzoReader
 
 BASE_SHIFT = 1.13
 COM_SHIFT = 0.54
 # COM_SHIFT = 0.545
 
-SCALE = (1 / 0.85) * (1 / 10.)
+SCALE = (1 / 0.85) * (1 / 10.0)
 
 
 class Base:
@@ -24,11 +24,11 @@ class Base:
         self.seq = seq
 
         self.cm_pos = None
-        self.a1 = np.array([1., 0, 0])
-        self.a3 = np.array([0, 1., 0])
+        self.a1 = np.array([1.0, 0, 0])
+        self.a3 = np.array([0, 1.0, 0])
 
     def set_position(self, cm_bp, e1_bp, e2_bp, e3_bp, preferred=True):
-        if  not preferred:
+        if not preferred:
             self.cm_pos = SCALE * cm_bp - COM_SHIFT * e2_bp
             self.a1 = e2_bp
             self.a3 = e3_bp
@@ -42,15 +42,36 @@ class Base:
 
     def pos_str(self):
         if self.cm_pos is None:
-            print("Warning, base ", self.id, self.oxid, 'was not assigned cm', file=sys.stderr)
+            print(
+                "Warning, base ",
+                self.id,
+                self.oxid,
+                "was not assigned cm",
+                file=sys.stderr,
+            )
         if self.cm_pos[0] == 0 and self.cm_pos[1] == 0 and self.cm_pos[2] == 0:
-            print("Warning, cm of base ", self.id, self.oxid, 'was set to 0 0 0', file=sys.stderr)
+            print(
+                "Warning, cm of base ",
+                self.id,
+                self.oxid,
+                "was set to 0 0 0",
+                file=sys.stderr,
+            )
 
         cm = self.cm_pos
         a1 = self.a1
         a3 = self.a3
-        s = '%f %f %f %f %f %f %f %f %f 0.0 0.0 0.0 0.0 0.0 0.0' % (
-            cm[0], cm[1], cm[2], a1[0], a1[1], a1[2], a3[0], a3[1], a3[2])
+        s = "%f %f %f %f %f %f %f %f %f 0.0 0.0 0.0 0.0 0.0 0.0" % (
+            cm[0],
+            cm[1],
+            cm[2],
+            a1[0],
+            a1[1],
+            a1[2],
+            a3[0],
+            a3[1],
+            a3[2],
+        )
 
         return s
 
@@ -85,8 +106,7 @@ class Strand:
                 else:
                     new_assigned = b.cm_pos
                     N = len(unassigned)
-                    v = (np.array(new_assigned) - 
-                         np.array(last_assigned)) / float(N)
+                    v = (np.array(new_assigned) - np.array(last_assigned)) / float(N)
                     spos = np.array(last_assigned)
                     for ub in unassigned:
                         # print 'Assigning to ',ub.oxid, last_assigned + v
@@ -102,7 +122,7 @@ class Strand:
         last_assigned = None
         unassigned = []
         cm = np.zeros(3)
-        counter = 0.
+        counter = 0.0
         for b in self.bases:
             if not b.cm_pos is None:
                 cm += np.array(b.cm_pos)
@@ -120,11 +140,11 @@ class Strand:
 
                     # v = (np.array(new_assigned) -
                     #     np.array(last_assigned))/float(N)
-                    spos = np.array(last_assigned) 
+                    spos = np.array(last_assigned)
                     for ub in unassigned:
                         # print 'Assigning to ',ub.oxid, last_assigned + v
                         ub.cm_pos = spos
-                        spos = spos + 0.8 * v 
+                        spos = spos + 0.8 * v
                     unassigned = []
             else:
                 unassigned.append(b)
@@ -147,8 +167,8 @@ def reconstruct_strands(three_ends, bases):
             added.append(s_next)
             s_next = b.get_5prime()
         strands.append(s)
-    
-    if(len(bases) != len(added)):  # maybe circular strands?
+
+    if len(bases) != len(added):  # maybe circular strands?
         s = None
         for b_id, b in list(bases.items()):
             if b_id not in added:  # maybe new strand:
@@ -163,7 +183,7 @@ def reconstruct_strands(three_ends, bases):
                     s.add_base_at_5_prime(nb)
                     added.append(b_next)
                     b_next = nb.get_5prime()
-                    
+
                     if len(added) > len(list(bases.keys())):
                         raise Exception("error while processing circular strand")
                 strands.append(s)
@@ -172,7 +192,7 @@ def reconstruct_strands(three_ends, bases):
 
 
 def write_topology(strands, outfile):
-    handle = open(outfile, 'w')
+    handle = open(outfile, "w")
     total_p = int(np.sum([len(s) for s in strands]))
     total_s = len(strands)
     print(total_p, total_s, file=handle)
@@ -190,7 +210,7 @@ def write_topology(strands, outfile):
 
 
 def write_conf(bases, fname, box):
-    handle = open(fname, 'w')
+    handle = open(fname, "w")
     print("t = 0", file=handle)
     print("b = %f %f %f" % (box, box, box), file=handle)
     print("E = 0 0 0", file=handle)
@@ -199,17 +219,18 @@ def write_conf(bases, fname, box):
         ox_bases[b.oxid] = b
 
     for i in range(max(ox_bases.keys()) + 1):
-        handle.write(ox_bases[i].pos_str() + '\n')
+        handle.write(ox_bases[i].pos_str() + "\n")
 
     handle.close()
 
+
 def write_force(bases, pairs, fname):
-    handle = open(fname, 'w')
+    handle = open(fname, "w")
     forces = ""
     for p in list(pairs.values()):
         a = bases[p[0]].oxid
         b = bases[p[1]].oxid
-        forces = forces + get_mutual_force(a, b)   
+        forces = forces + get_mutual_force(a, b)
     handle.write(forces)
     handle.close()
 
@@ -227,24 +248,31 @@ def assign_base_positions(bases, cm_pos, triads, pair_ids):
 
 
 def get_mutual_force(id1, id2, stiffness=0.1):
-    s = "{\n type = mutual_trap\n particle = %d\n ref_particle = %d\n stiff = %f \n r0 = 1.2 \n}\n" % (id1, id2, stiffness)
-    s = s + "{\n type = mutual_trap\n particle = %d\n ref_particle = %d\n stiff = %f \n r0 = 1.2 \n}\n" % (id2, id1, stiffness)
+    s = (
+        "{\n type = mutual_trap\n particle = %d\n ref_particle = %d\n stiff = %f \n r0 = 1.2 \n}\n"
+        % (id1, id2, stiffness)
+    )
+    s = (
+        s
+        + "{\n type = mutual_trap\n particle = %d\n ref_particle = %d\n stiff = %f \n r0 = 1.2 \n}\n"
+        % (id2, id1, stiffness)
+    )
     return s
 
 
 def load_and_convert(opts, invert_preference=False):
-    cando_file = opts['cando_file']
-    box = opts['box']
+    cando_file = opts["cando_file"]
+    box = opts["box"]
     # loads cando file into oxDNA system
-    infile = open(cando_file, 'r')
+    infile = open(cando_file, "r")
     lines = infile.readlines()
     top_start = -1
     top_end = -1
     for i, line in enumerate(lines):
-        if 'dnaTop' in line:
+        if "dnaTop" in line:
             top_start = i + 1
 
-        if 'dNode' in line:
+        if "dNode" in line:
             top_end = i - 1
             break
 
@@ -254,14 +282,14 @@ def load_and_convert(opts, invert_preference=False):
 
     # do nodes
     for i, line in enumerate(lines):
-        if 'dNode' in line:
+        if "dNode" in line:
             node_start = i + 1
 
-        if 'triad' in line:
+        if "triad" in line:
             node_end = i - 1
             break
     for line in lines[node_start:node_end]:
-        nodes_info = line.strip().split(',')
+        nodes_info = line.strip().split(",")
         # print nodes_info
         nid = int(nodes_info[0])
         node_pos = [float(v) for v in nodes_info[1:]]
@@ -281,7 +309,7 @@ def load_and_convert(opts, invert_preference=False):
 
     # print triad_start,triad_end
     for line in lines[triad_start:(triad_end)]:
-        vals = line.strip().split(',')
+        vals = line.strip().split(",")
 
         # print vals
         t_id = int(vals[0])
@@ -298,7 +326,7 @@ def load_and_convert(opts, invert_preference=False):
     for i, line in enumerate(lines):
         if "id_nt," in line:
             pairs_start = i + 1
-        elif pairs_start > -1 and len(line.strip().split(',')) < 3:
+        elif pairs_start > -1 and len(line.strip().split(",")) < 3:
             pairs_end = i
             break
 
@@ -307,7 +335,7 @@ def load_and_convert(opts, invert_preference=False):
     # print pairs_start, pairs_end
 
     for line in lines[pairs_start:pairs_end]:
-        vals = line.strip().split(',')
+        vals = line.strip().split(",")
         # print vals
         pid = int(vals[0])
         nuca = int(vals[1])
@@ -320,7 +348,7 @@ def load_and_convert(opts, invert_preference=False):
     bases = {}
     three_primes = []
     for topline in lines[top_start:top_end]:
-        vals = topline.strip().split(',')
+        vals = topline.strip().split(",")
         base_id = int(vals[1])
         up = int(vals[2])  # up is the 5'
         down = int(vals[3])  # down is the 3'
@@ -334,77 +362,93 @@ def load_and_convert(opts, invert_preference=False):
     # print three_primes
     # print bases.keys()
     strands = reconstruct_strands(three_primes, bases)
-    write_topology(strands, cando_file + '.top')
+    write_topology(strands, cando_file + ".top")
 
     assign_base_positions(bases, node_cm_pos, triads, pair_ids)
     for s in strands:
         s.better_fix_nans()
 
-    write_conf(bases, cando_file + '.oxdna', box)
+    write_conf(bases, cando_file + ".oxdna", box)
 
-    if opts['print_force_file']:
-        force_file = cando_file + '.forces.txt'
+    if opts["print_force_file"]:
+        force_file = cando_file + ".forces.txt"
         print("## Printing forces to the '%s' file" % force_file, file=sys.stderr)
         write_force(bases, pair_ids, force_file)
-        
+
     return strands
 
 
 def print_usage():
-        print("USAGE:", file=sys.stderr)
-        print("\t%s CanDo_file" % sys.argv[0], file=sys.stderr)
-        print("\t[-b\--box=100]", file=sys.stderr)
-        print("\t[-f\--print-force-file]\n", file=sys.stderr)
-        exit(1)
+    print("USAGE:", file=sys.stderr)
+    print("\t%s CanDo_file" % sys.argv[0], file=sys.stderr)
+    print("\t[-b\--box=100]", file=sys.stderr)
+    print("\t[-f\--print-force-file]\n", file=sys.stderr)
+    exit(1)
 
 
 def parse_options():
-    shortArgs = 'b:f'
-    longArgs = ['box=', 'print-force-file']
-    
+    shortArgs = "b:f"
+    longArgs = ["box=", "print-force-file"]
+
     # for some reason, files originally made in T1 have a different .json form than T2
     # it would be possible to rewrite all the parameters to fix it, but tossing a factor
     # of 1.2 for DNA and 1.6 for RNA on base_vector seems to be good enough
-    opts = {
-        "box" : 100.,
-        "print_force_file" : False
-    }
-    
+    opts = {"box": 100.0, "print_force_file": False}
+
     try:
         import getopt
+
         args, positional_args = getopt.gnu_getopt(sys.argv[1:], shortArgs, longArgs)
         for k in args:
-            if k[0] == '-b' or k[0] == '--box':
+            if k[0] == "-b" or k[0] == "--box":
                 try:
-                    opts['box'] = float(k[1])
-                    print("## Setting the box size to %f" % opts['box'], file=sys.stderr)
+                    opts["box"] = float(k[1])
+                    print(
+                        "## Setting the box size to %f" % opts["box"], file=sys.stderr
+                    )
                 except ValueError:
-                    print("The argument of '%s' should be a number (got '%s' instead)" % (k[0], k[1]), file=sys.stderr)
+                    print(
+                        "The argument of '%s' should be a number (got '%s' instead)"
+                        % (k[0], k[1]),
+                        file=sys.stderr,
+                    )
                     exit(1)
-            elif k[0] == '-f' or k[0] == '--print-force-file':
-                opts['print_force_file'] = True
-            
-        opts['cando_file'] = positional_args[0]
-        
+            elif k[0] == "-f" or k[0] == "--print-force-file":
+                opts["print_force_file"] = True
+
+        opts["cando_file"] = positional_args[0]
+
     except Exception:
         print_usage()
-        
+
     return opts
 
 
-
-if __name__ == '__main__':
+def main():
     opts = parse_options()
-    
+
     s = load_and_convert(opts)
-    r = LorenzoReader(opts['cando_file'] + '.top', opts['cando_file'] + '.oxdna')
+    r = LorenzoReader(opts["cando_file"] + ".top", opts["cando_file"] + ".oxdna")
     mys = r.get_system()
-    refdir = mys._strands[0]._nucleotides[1].get_pos_base() - mys._strands[0]._nucleotides[0].get_pos_base()
+    refdir = (
+        mys._strands[0]._nucleotides[1].get_pos_base()
+        - mys._strands[0]._nucleotides[0].get_pos_base()
+    )
     refdir /= np.sqrt(np.dot(refdir, refdir))
-    ref_angle = np.dot(mys._strands[0]._nucleotides[0]._a3, refdir) 
-    if ref_angle < 0 and abs(ref_angle) > 0.8:  # likely selected the wrong orientation for preferred nucleotide!
+    ref_angle = np.dot(mys._strands[0]._nucleotides[0]._a3, refdir)
+    if (
+        ref_angle < 0 and abs(ref_angle) > 0.8
+    ):  # likely selected the wrong orientation for preferred nucleotide!
         Strand.base_counter = 0
         s = load_and_convert(opts, invert_preference=True)
 
-    print("## Wrote data to '%s' / '%s'" % (opts['cando_file'] + '.oxdna', opts['cando_file'] + '.top'), file=sys.stderr)
+    print(
+        "## Wrote data to '%s' / '%s'"
+        % (opts["cando_file"] + ".oxdna", opts["cando_file"] + ".top"),
+        file=sys.stderr,
+    )
     print("## DONE", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
