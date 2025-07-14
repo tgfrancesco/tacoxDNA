@@ -6,6 +6,7 @@ import re
 import sys
 from pathlib import Path
 
+import click
 import numpy as np
 
 from .libs import base
@@ -788,7 +789,7 @@ def print_usage():
     print("USAGE:", file=sys.stderr)
     print("\t%s cadnano_file lattice_type" % sys.argv[0], file=sys.stderr)
     print(
-        "\t[-q\--sequence FILE] [-b\--box VALUE] [-e\--seed VALUE] [-p\--print-virt2nuc] [-o\--print-oxview]",
+        "\t[-q\--sequence FILE] [-b\--box VALUE] [-e\--seed VALUE] [-p\--print-virt2nuc] [-ox\--print-oxview] [-o\--output_file FILE] [-m\--print_lattice_id_map]",
         file=sys.stderr,
     )
     exit(1)
@@ -804,75 +805,6 @@ def randomSequenceGenerator(cadsys):
         sequences.append(seq)
 
     return sequences
-
-
-def readingCli(*args):
-    if len(sys.argv) < 3:
-        print_usage()
-
-    shortArgs = "q:b:e:po"
-    longArgs = [
-        "sequence=",
-        "box=",
-        "seed=",
-        "print_lattice_id_map",
-        "print-virt2nuc",
-        "print-oxview",
-    ]
-
-    side = False
-    sequence_filename = False
-    print_lattice_id_map = False
-    print_virt2nuc = False
-    print_oxview = False
-    source_file = sys.argv[1]
-
-    np_seed = None
-
-    if sys.argv[2] == "sq":
-        lattice_type = "sq"
-    elif sys.argv[2] == "he":
-        lattice_type = "he"
-    else:
-        print("Lattice_type should be either 'sq' or 'he'", file=sys.stderr)
-        exit(1)
-
-    try:
-        import getopt
-
-        args, _ = getopt.gnu_getopt(sys.argv[3:], shortArgs, longArgs)
-        for k in args:
-            if k[0] == "-q" or k[0] == "--sequence":
-                sequence_filename = k[1]
-            elif k[0] == "-b" or k[0] == "--box":
-                side = float(k[1])
-                base.Logger.log(
-                    "The system will be put in a box of side %s (in oxDNA simulation units)"
-                    % str(side),
-                    base.Logger.INFO,
-                )
-            elif k[0] == "-e" or k[0] == "--seed":
-                np_seed = int(k[1])
-                np.random.seed(np_seed)
-            elif k[0] == "-m" or k[0] == "--print_lattice_id_map":
-                print_lattice_id_map == True
-            elif k[0] == "-p" or k[0] == "--print-virt2nuc":
-                print_virt2nuc = True
-            elif k[0] == "-o" or k[0] == "--print-oxview":
-                print_oxview = True
-
-    except Exception:
-        print_usage()
-
-    return (
-        source_file,
-        lattice_type,
-        sequence_filename,
-        side,
-        np_seed,
-        print_virt2nuc,
-        print_oxview,
-    )
 
 
 def parsingCli(source_file, sequence_filename):
@@ -1473,7 +1405,7 @@ def cadnano_oxdna(
 
         with open(map_file_name, "w") as map_file:
             json.dump(stringify_keys(pos_to_id), map_file)
-
+        print(pos_to_id)
         with open(pair_file_name, "w") as pair_file:
             for k in pos_to_id.keys():
                 if k[2] == True and (k[0], k[1], False) in pos_to_id.keys():
@@ -1594,18 +1526,64 @@ def cadnano_oxdna(
     print("## DONE", file=sys.stderr)
 
 
-def main():
-    (
-        source_file,
-        lattice_type,
-        sequence_filename,
-        side,
-        np_seed,
-        print_lattice_id_map,
-        print_virt2nuc,
-        print_oxview,
-    ) = readingCli()
+@click.command()
+@click.argument("source_file", type=click.Path(exists=True))
+@click.argument("lattice_type", type=click.Choice(["sq", "he"]))
+@click.option(
+    "-q", "--sequence", "sequence_filename", type=click.Path(), help="Sequence file"
+)
+@click.option("-b", "--box", "side", type=float, help="Box side (oxDNA units)")
+@click.option("-e", "--seed", "np_seed", type=int, help="Random seed")
+@click.option("-m", "--print-lattice-id-map", is_flag=True, help="Print lattice id map")
+@click.option("-p", "--print-virt2nuc", is_flag=True, help="Print virt2nuc")
+@click.option("-ox", "--print-oxview", is_flag=True, help="Print OxView output")
+@click.option(
+    "-o", "--output-file", "output_file", type=click.Path(), help="Output file name"
+)
+def main(
+    source_file,
+    lattice_type,
+    sequence_filename,
+    side,
+    np_seed,
+    print_lattice_id_map,
+    print_virt2nuc,
+    print_oxview,
+    output_file,
+):
+    """
+    cadnano_oxDNA converter
+
+    INPUT_FILE: Path to the input JSON file.
+    """
+    # Set random seed if provided
+    if np_seed is not None:
+        np.random.seed(np_seed)
+
+    # Set output file default if not provided
+    if output_file is None:
+        output_file = "output.dat"
+    output_file = Path(output_file).absolute()
+
+    # Logging and info
+    click.echo(f"INFO: Using json file {source_file}")
+    if sequence_filename:
+        click.echo(f"INFO: Using sequence file {sequence_filename}")
+    else:
+        click.echo("INFO: No sequence file given, using random sequence")
+    if side:
+        click.echo(
+            f"INFO: The system will be put in a box of side {side} (in oxDNA simulation units)"
+        )
+    if print_lattice_id_map:
+        click.echo("INFO: Lattice ID map will be printed.")
+    if print_virt2nuc:
+        click.echo("INFO: Virt2nuc will be printed.")
+    if print_oxview:
+        click.echo("INFO: OxView output will be printed.")
+    click.echo(f"INFO: Output will be written to {output_file}")
     cadsys, sequences = parsingCli(source_file, sequence_filename)
+    print(type(output_file))
     output_file = Path(output_file).absolute()
     cadnano_oxdna(
         output_file,
