@@ -1405,7 +1405,7 @@ def cadnano_oxdna(
 
         with open(map_file_name, "w") as map_file:
             json.dump(stringify_keys(pos_to_id), map_file)
-        print(pos_to_id)
+
         with open(pair_file_name, "w") as pair_file:
             for k in pos_to_id.keys():
                 if k[2] == True and (k[0], k[1], False) in pos_to_id.keys():
