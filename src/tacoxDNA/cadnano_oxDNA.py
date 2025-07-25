@@ -852,6 +852,7 @@ def cadnano_oxdna(
     print_lattice_id_map=False,
     print_virt2nuc=False,
     print_oxview=False,
+    print_pair_file=False,
 ):
     vh_vb2nuc = cu.vhelix_vbase_to_nucleotide()
     vh_vb2nuc_final = cu.vhelix_vbase_to_nucleotide()
@@ -1371,7 +1372,7 @@ def cadnano_oxdna(
 
         vh_vb2nuc_rev.add_stap(vh, vb, strandii, rev_nuciis)
 
-    if print_lattice_id_map:
+    if print_lattice_id_map or print_pair_file:
 
         def search_key(dict, val):
             key_lst = []
@@ -1391,17 +1392,23 @@ def cadnano_oxdna(
 
         # Check if the output_file has a suffix
         if output_file.suffix:
-            map_file_name = output_file.with_suffix(
-                output_file.suffix + "_cadnano2oxDNA_map.json"
-            )
-            pair_file_name = output_file.with_suffix(
-                output_file.suffix + "_bond_pairs.txt"
-            )
+            if print_lattice_id_map:
+                map_file_name = output_file.with_suffix(
+                    output_file.suffix + "_cadnano2oxDNA_map.json"
+                )
+            elif print_pair_file:
+                pair_file_name = output_file.with_suffix(
+                    output_file.suffix + "_bond_pairs.txt"
+                )
         else:
-            map_file_name = output_file.with_name(
-                output_file.name + "_cadnano2oxDNA_map.json"
-            )
-            pair_file_name = output_file.with_name(output_file.name + "_bond_pairs.txt")
+            if print_lattice_id_map:
+                map_file_name = output_file.with_name(
+                    output_file.name + "_cadnano2oxDNA_map.json"
+                )
+            if print_pair_file:
+                pair_file_name = output_file.with_name(
+                    output_file.name + "_bond_pairs.txt"
+                )
 
         with open(map_file_name, "w") as map_file:
             json.dump(stringify_keys(pos_to_id), map_file)
@@ -1526,7 +1533,7 @@ def cadnano_oxdna(
     print("## DONE", file=sys.stderr)
 
 
-@click.command()
+@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.argument("source_file", type=click.Path(exists=True))
 @click.argument("lattice_type", type=click.Choice(["sq", "he"]))
 @click.option(
@@ -1539,6 +1546,13 @@ def cadnano_oxdna(
 @click.option("-ox", "--print-oxview", is_flag=True, help="Print OxView output")
 @click.option(
     "-o", "--output-file", "output_file", type=click.Path(), help="Output file name"
+)
+@click.option(
+    "-pair",
+    "--print-pair-file",
+    "print_pair_file",
+    is_flag=True,
+    help="Print pair file",
 )
 def main(
     source_file,
@@ -1594,6 +1608,7 @@ def main(
         print_lattice_id_map,
         print_virt2nuc,
         print_oxview,
+        print_pair_file,
     )
 
 
